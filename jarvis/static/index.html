@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jarvis — AI Assistant</title>
+<style>
+  :root{
+    --bg:#070a12; --panel:#0e1420; --panel2:#131b2b; --line:#1e293b;
+    --text:#e8edf7; --muted:#8892a6; --cyan:#22d3ee; --violet:#8b5cf6;
+    --ok:#34d399; --bad:#f87171; --user:#132033;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(139,92,246,.16), transparent 60%),
+      radial-gradient(800px 500px at 10% 110%, rgba(34,211,238,.12), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    display:flex; overflow:hidden;
+  }
+  /* ---------- sidebar ---------- */
+  aside{
+    width:280px; flex:0 0 280px; padding:22px 18px; display:flex; flex-direction:column; gap:18px;
+    background:rgba(9,13,22,.72); border-right:1px solid var(--line); backdrop-filter:blur(12px);
+    overflow-y:auto;
+  }
+  .brand{display:flex; align-items:center; gap:12px}
+  .brand h1{font-size:17px; margin:0; letter-spacing:.5px}
+  .brand small{color:var(--muted); font-size:11px; display:block; letter-spacing:.14em; text-transform:uppercase}
+  .orb-mini{
+    width:38px;height:38px;border-radius:50%;
+    background:conic-gradient(from 0deg,var(--cyan),var(--violet),var(--cyan));
+    box-shadow:0 0 22px rgba(34,211,238,.45); animation:spin 6s linear infinite; flex:0 0 auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px}
+  .label{font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin-bottom:8px}
+  select,input[type=text]{
+    width:100%; background:var(--panel2); color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:9px 10px; font-size:13px; outline:none; font-family:inherit;
+  }
+  select:focus,input:focus{border-color:#334a70}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0; font-size:13px}
+  .row span.t{color:#cfd8e8}
+  .switch{position:relative; width:40px; height:22px; flex:0 0 auto}
+  .switch input{opacity:0; width:0; height:0; position:absolute}
+  .slider{position:absolute; inset:0; background:#26324a; border-radius:22px; cursor:pointer; transition:.2s}
+  .slider:before{content:""; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#93a3bd;
+    border-radius:50%; transition:.2s}
+  .switch input:checked + .slider{background:linear-gradient(90deg,var(--cyan),var(--violet))}
+  .switch input:checked + .slider:before{transform:translateX(18px); background:#fff}
+  .status{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%; background:var(--bad); box-shadow:0 0 10px currentColor; color:var(--bad)}
+  .dot.on{background:var(--ok); color:var(--ok)}
+  .hint{font-size:11px; color:var(--muted); line-height:1.5; margin-top:6px}
+  .btn{
+    background:var(--panel2); color:#cfd8e8; border:1px solid var(--line); border-radius:10px;
+    padding:9px 12px; font-size:12.5px; cursor:pointer; font-family:inherit; width:100%;
+  }
+  .btn:hover{border-color:#3b4f74; color:#fff}
+  #memoryList{list-style:none; margin:0; padding:0; font-size:12px; color:#b9c4d6; max-height:130px; overflow:auto}
+  #memoryList li{padding:5px 0; border-bottom:1px dashed #1b2434; line-height:1.4}
+  /* ---------- main ---------- */
+  main{flex:1; display:flex; flex-direction:column; min-width:0; position:relative}
+  header{
+    padding:16px 26px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px;
+    background:rgba(9,13,22,.5); backdrop-filter:blur(10px);
+  }
+  header .title{font-size:14px; font-weight:600}
+  header .sub{font-size:12px; color:var(--muted)}
+  .spacer{flex:1}
+  #chat{flex:1; overflow-y:auto; padding:26px 26px 12px; display:flex; flex-direction:column; gap:16px; scroll-behavior:smooth}
+  .msg{max-width:min(760px,88%); display:flex; gap:12px; animation:pop .22s ease-out}
+  @keyframes pop{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+  .msg .avatar{
+    width:32px;height:32px;border-radius:10px; flex:0 0 auto; display:grid; place-items:center; font-size:14px;
+    background:linear-gradient(140deg,var(--cyan),var(--violet)); color:#04121a; font-weight:700;
+  }
+  .msg.user{align-self:flex-end; flex-direction:row-reverse}
+  .msg.user .avatar{background:#233047; color:#9fb4d4}
+  .bubble{
+    background:var(--panel); border:1px solid var(--line); padding:12px 15px; border-radius:14px;
+    font-size:14.5px; line-height:1.62; white-space:pre-wrap; word-wrap:break-word;
+  }
+  .msg.user .bubble{background:var(--user); border-color:#1d2b44}
+  .bubble code{background:#0a1120; border:1px solid #1b2740; padding:1.5px 5px; border-radius:5px; font-size:12.8px;
+    font-family:ui-monospace,Consolas,monospace}
+  .bubble pre{background:#0a1120; border:1px solid #1b2740; padding:12px; border-radius:10px; overflow-x:auto;
+    font-size:12.8px; margin:8px 0}
+  .bubble pre code{border:0; padding:0; background:none}
+  .bubble b{color:#fff}
+  .actions{display:flex; flex-wrap:wrap; gap:6px; margin-top:9px}
+  .chip{
+    font-size:11.5px; padding:4px 9px; border-radius:20px; border:1px solid var(--line); color:#9fb4d4;
+    background:#0b1220; display:flex; align-items:center; gap:6px;
+  }
+  .chip.ok{border-color:#1c4b3c; color:#7ee2b8}
+  .chip.bad{border-color:#4b1c1c; color:#f6a6a6}
+  .typing{display:flex; gap:4px; align-items:center; padding:6px 2px}
+  .typing i{width:6px;height:6px;border-radius:50%;background:var(--cyan);opacity:.35;animation:blink 1.2s infinite}
+  .typing i:nth-child(2){animation-delay:.2s} .typing i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25; transform:translateY(0)}30%{opacity:1; transform:translateY(-3px)}}
+  /* ---------- composer ---------- */
+  .composer{padding:14px 26px 20px; border-top:1px solid var(--line); background:rgba(9,13,22,.6); backdrop-filter:blur(10px)}
+  .inputwrap{
+    display:flex; align-items:flex-end; gap:10px; background:var(--panel); border:1px solid var(--line);
+    border-radius:16px; padding:8px 10px 8px 8px;
+  }
+  .inputwrap:focus-within{border-color:#33507d; box-shadow:0 0 0 3px rgba(34,211,238,.08)}
+  textarea{
+    flex:1; background:none; border:0; color:var(--text); resize:none; outline:none; font-family:inherit;
+    font-size:14.5px; line-height:1.5; padding:9px 6px; max-height:150px;
+  }
+  textarea::placeholder{color:#5d6b83}
+  .icon-btn{
+    width:40px;height:40px;border-radius:12px;border:1px solid var(--line); background:var(--panel2);
+    color:#c7d3e6; cursor:pointer; display:grid; place-items:center; flex:0 0 auto; transition:.15s;
+  }
+  .icon-btn:hover{border-color:#3b4f74; color:#fff}
+  .icon-btn.mic.listening{
+    background:linear-gradient(140deg,#ef4444,#f97316); border-color:transparent; color:#fff;
+    animation:pulse 1.4s infinite;
+  }
+  .icon-btn.mic.handsfree{box-shadow:0 0 0 3px rgba(34,211,238,.16); border-color:#2b6f7d}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.55)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+  .send{
+    background:linear-gradient(140deg,var(--cyan),var(--violet)); border:0; color:#05121b; font-weight:700;
+  }
+  .send:hover{filter:brightness(1.1)}
+  .send:disabled{opacity:.45; cursor:not-allowed}
+  .micstatus{
+    display:none; margin:8px 2px 0; font-size:12px; line-height:1.5; padding:7px 11px;
+    border-radius:9px; background:#0d1522; border:1px solid #24334d; color:#a8b6cc;
+  }
+  .micstatus.show{display:block}
+  .micstatus.warn{background:#2a2213; border-color:#5c4a1e; color:#f0d79a}
+  .micstatus.err{background:#2a1618; border-color:#5b2b2b; color:#ffc9c9}
+  .micstatus b{color:#fff}
+  .foot{display:flex; justify-content:space-between; gap:10px; margin-top:8px; font-size:11px; color:#5d6b83}
+  kbd{background:#141d2c; border:1px solid #263349; border-radius:4px; padding:1px 5px; font-size:10.5px}
+  #banner{
+    display:none; margin:0 26px; margin-top:14px; padding:10px 14px; border-radius:12px; font-size:13px;
+    background:#2a1b1b; border:1px solid #5b2b2b; color:#ffc9c9;
+  }
+  @media (max-width:820px){
+    aside{position:fixed; z-index:20; height:100%; transform:translateX(-100%); transition:.25s}
+    aside.open{transform:none}
+    .menu{display:grid !important}
+    textarea{font-size:14px}
+    .foot kbd{display:none}
+    .foot span:first-child{display:none}
+    #chat{padding:18px 14px}
+    .composer{padding:12px 14px 16px}
+  }
+  .menu{display:none; width:38px; height:38px}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#1d2942; border-radius:9px}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <div class="brand">
+    <div class="orb-mini"></div>
+    <div>
+      <h1>JARVIS</h1>
+      <small>local ai assistant</small>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">Brain</div>
+    <select id="model"><option value="">loading…</option></select>
+    <div class="status" style="margin-top:10px">
+      <span class="dot" id="dot"></span><span id="statusText">checking Ollama…</span>
+    </div>
+    <div class="hint" id="modelHint"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">Capabilities</div>
+    <div class="row">
+      <span class="t">Speak replies</span>
+      <label class="switch"><input type="checkbox" id="tts" checked><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <span class="t">Hands-free listening</span>
+      <label class="switch"><input type="checkbox" id="handsFree"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <span class="t">Allow PC control</span>
+      <label class="switch"><input type="checkbox" id="pcControl"><span class="slider"></span></label>
+    </div>
+    <div class="hint">PC control unlocks shell commands, lock, restart and shutdown. Leave it off unless you need it.</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Memory</div>
+    <ul id="memoryList"><li style="color:#5d6b83">nothing saved yet</li></ul>
+    <button class="btn" style="margin-top:10px" id="clearMemory">Clear memory</button>
+  </div>
+
+  <div class="card">
+    <div class="label">Session</div>
+    <button class="btn" id="newChat">New conversation</button>
+  </div>
+</aside>
+
+<main>
+  <header>
+    <button class="icon-btn menu" id="menuBtn">☰</button>
+    <div>
+      <div class="title">Jarvis</div>
+      <div class="sub" id="subline">Ready when you are.</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="status"><span class="dot" id="dot2"></span><span id="statusText2">offline</span></div>
+  </header>
+
+  <div id="banner"></div>
+  <div id="chat"></div>
+
+  <div class="composer">
+    <div class="inputwrap">
+      <button class="icon-btn mic" id="micBtn" title="Talk to Jarvis">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+          <path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 19v3"/></svg>
+      </button>
+      <textarea id="input" rows="1" placeholder="Ask me anything, or tell me what to do…"></textarea>
+      <button class="icon-btn send" id="sendBtn" title="Send">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+      </button>
+    </div>
+    <div id="micStatus" class="micstatus"></div>
+    <div class="foot">
+      <span><kbd>Enter</kbd> to send · <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line</span>
+      <span id="engine">running locally · nothing leaves your PC</span>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ============================ state ============================ */
+const state = {
+  history: [],          // [{role, content}] pure dialogue sent to the server
+  model: "",
+  busy: false,
+  online: false,
+  handsFreeOn: false,
+  speaking: false,
+  recognition: null,
+  listening: false,
+};
+
+const $ = (id) => document.getElementById(id);
+const chat = $("chat");
+
+/* ============================ render helpers ============================ */
+function esc(s){
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+/* tiny markdown: **bold**, `code`, ```blocks```, - bullets, 1. lists */
+function md(text){
+  let s = esc(text);
+  const blocks = [];
+  s = s.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    blocks.push(code.replace(/\n$/,""));
+    return `\u0000${blocks.length - 1}\u0000`;
+  });
+  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  s = s.split("\n").map(line => {
+    if (/^\s*[-*]\s+/.test(line)) return "• " + line.replace(/^\s*[-*]\s+/, "");
+    return line;
+  }).join("\n");
+  s = s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<pre><code>${blocks[+i]}</code></pre>`);
+  return s;
+}
+
+function addMessage(role, content, actions){
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + role;
+  const av = document.createElement("div");
+  av.className = "avatar";
+  av.textContent = role === "user" ? "YOU" : "J";
+  av.style.fontSize = role === "user" ? "9px" : "14px";
+  const bub = document.createElement("div");
+  bub.className = "bubble";
+  bub.innerHTML = md(content);
+  if (actions && actions.length){
+    const row = document.createElement("div");
+    row.className = "actions";
+    actions.forEach(a => {
+      const chip = document.createElement("span");
+      chip.className = "chip " + (a.ok ? "ok" : "bad");
+      chip.textContent = (a.ok ? "✓ " : "✕ ") + prettyTool(a.tool, a.arguments);
+      chip.title = JSON.stringify(a.result).slice(0, 400);
+      row.appendChild(chip);
+    });
+    bub.appendChild(row);
+  }
+  wrap.append(av, bub);
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return wrap;
+}
+function prettyTool(name, args){
+  const a = args || {};
+  const map = {
+    open_app: () => "opened " + (a.name || "app"),
+    open_url: () => "opened website",
+    web_search: () => "searched the web",
+    list_files: () => "listed files",
+    read_file: () => "read file",
+    write_file: () => "wrote file",
+    make_folder: () => "created folder",
+    copy_folder: () => "copied folder",
+    move_folder: () => "moved folder",
+    copy_file: () => "copied file",
+    search_files: () => "searched files",
+    screenshot: () => "took screenshot",
+    type_text: () => "typed text",
+    press_keys: () => "pressed " + (a.keys || "keys"),
+    volume: () => "volume " + (a.action || "up"),
+    media: () => "media " + (a.action || ""),
+    clipboard_read: () => "read clipboard",
+    clipboard_write: () => "copied to clipboard",
+    system_info: () => "checked system",
+    get_datetime: () => "checked the time",
+    remember: () => "saved to memory",
+    recall: () => "recalled memory",
+    run_command: () => "ran command",
+    lock_pc: () => "locked PC",
+    shutdown_pc: () => "shutdown scheduled",
+    restart_pc: () => "restart scheduled",
+  };
+  const g = map[name];
+  return g ? g() : name;
+}
+
+function addTyping(){
+  const wrap = document.createElement("div");
+  wrap.className = "msg assistant";
+  wrap.id = "typing";
+  wrap.innerHTML = `<div class="avatar">J</div><div class="bubble">
+    <div class="typing"><i></i><i></i><i></i></div></div>`;
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+}
+function killTyping(){ const t = $("typing"); if (t) t.remove(); }
+
+function banner(text){
+  const b = $("banner");
+  if (!text){ b.style.display = "none"; return; }
+  b.textContent = text;
+  b.style.display = "block";
+}
+
+/* ============================ server ============================ */
+async function loadStatus(){
+  try{
+    const r = await fetch("/api/status");
+    const d = await r.json();
+    state.online = true;
+    setOllama(d.ollama_running, d.models, d.error);
+    renderMemory(d.memory || []);
+    banner("");
+  }catch(e){
+    state.online = false;
+    setOllama(false, [], "server offline");
+    banner("This is only the interface preview. To actually use Jarvis, run run.bat on your PC — "
+         + "the assistant needs its local server and Ollama to be running.");
+  }
+}
+
+function setOllama(up, models, error){
+  [$("dot"), $("dot2")].forEach(d => d.classList.toggle("on", up));
+  const txt = up ? "Ollama connected" : "Ollama not running";
+  $("statusText").textContent = txt;
+  $("statusText2").textContent = up ? "online" : "offline";
+
+  const sel = $("model");
+  const current = state.model;
+  sel.innerHTML = "";
+  if (models && models.length){
+    models.forEach(m => {
+      const o = document.createElement("option");
+      o.value = o.textContent = m;
+      sel.appendChild(o);
+    });
+    const preferred = ["qwen2.5:7b","qwen2.5:3b","llama3.1:8b","llama3.2:3b"]
+      .find(m => models.includes(m));
+    state.model = current && models.includes(current) ? current : (preferred || models[0]);
+    sel.value = state.model;
+    $("modelHint").textContent = "";
+  } else {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = up ? "no models installed" : "ollama offline";
+    sel.appendChild(o);
+    state.model = "";
+    $("modelHint").innerHTML = up
+      ? "Pull a model: <code>ollama pull qwen2.5:3b</code>"
+      : "Start the Ollama app from your Start menu, then reload this page.";
+  }
+}
+
+function renderMemory(facts){
+  const ul = $("memoryList");
+  ul.innerHTML = "";
+  if (!facts || !facts.length){
+    ul.innerHTML = '<li style="color:#5d6b83">nothing saved yet</li>';
+    return;
+  }
+  facts.slice(-8).forEach(f => {
+    const li = document.createElement("li");
+    li.textContent = f;
+    ul.appendChild(li);
+  });
+}
+
+/* ============================ chat ============================ */
+let lastSent = {norm: "", at: 0};
+let lastReplyText = "";
+function normText(t){ return (t || "").toLowerCase().replace(/[^a-z0-9 ]+/g, "").replace(/\s+/g, " ").trim(); }
+function isDuplicate(t){
+  return normText(t) === lastSent.norm && (Date.now() - lastSent.at) < 4000;
+}
+function isEchoOfJarvis(t){
+  const a = normText(t), b = normText(lastReplyText);
+  if (!a || !b) return false;
+  return a === b || (a.length > 12 && (b.includes(a) || a.includes(b)));
+}
+
+async function send(text){
+  text = (text || "").trim();
+  if (!text || state.busy) return;
+  if (isDuplicate(text)) { $("input").value = ""; return; }
+  lastSent = {norm: normText(text), at: Date.now()};
+  if (!state.model){
+    addMessage("assistant", "I have no AI model to think with yet. Install one with:\n`ollama pull qwen2.5:3b`\nthen reload this page.");
+    return;
+  }
+  stopSpeaking();
+  addMessage("user", text);
+  state.history.push({role:"user", content:text});
+  $("input").value = "";
+  autoGrow();
+
+  state.busy = true;
+  state.busySince = Date.now();
+  $("sendBtn").disabled = true;
+  $("subline").textContent = "Thinking…";
+  addTyping();
+
+  try{
+    const r = await fetch("/api/chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        messages: state.history,
+        model: state.model,
+        allow_dangerous: $("pcControl").checked,
+      }),
+    });
+    const d = await r.json();
+    killTyping();
+
+    const reply = d.reply || d.error || "Something went wrong.";
+    lastReplyText = reply;
+    state.history = d.history && d.history.length ? d.history : state.history;
+    addMessage("assistant", reply, d.actions);
+    speak(reply);
+    if (d.actions && d.actions.some(a => a.tool === "remember")) loadStatus();
+    $("subline").textContent = "Ready when you are.";
+  }catch(err){
+    killTyping();
+    addMessage("assistant", "I could not reach my local server. Is the Jarvis window still open?");
+    $("subline").textContent = "Server unreachable.";
+  }finally{
+    state.busy = false;
+    $("sendBtn").disabled = false;
+    resumeListening();
+  }
+}
+
+$("sendBtn").onclick = () => send($("input").value);
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); send($("input").value); }
+});
+function autoGrow(){
+  const t = $("input");
+  t.style.height = "auto";
+  t.style.height = Math.min(t.scrollHeight, 150) + "px";
+}
+$("input").addEventListener("input", autoGrow);
+
+/* ============================ voice out ============================ */
+let voices = [];
+function loadVoices(){ voices = window.speechSynthesis ? speechSynthesis.getVoices() : []; }
+if (window.speechSynthesis){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+
+function pickVoice(){
+  if (!voices.length) return null;
+  const prefs = ["Microsoft Aria", "Microsoft Jenny", "Microsoft Guy", "Google UK English Female",
+                 "Samantha", "Zira", "Natural"];
+  for (const p of prefs){
+    const v = voices.find(x => x.name.includes(p));
+    if (v) return v;
+  }
+  return voices.find(v => v.lang.startsWith("en")) || voices[0];
+}
+
+function speak(text){
+  if (!$("tts").checked || !window.speechSynthesis) { resumeListening(); return; }
+  const clean = (text || "").replace(/```[\s\S]*?```/g, " code block ")
+                             .replace(/[*_`#]/g, "").slice(0, 1200);
+  if (!clean.trim()) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(clean);
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.rate = 1.02; u.pitch = 1.0; u.volume = 1;
+  state.speaking = true;
+  u.onend = () => { state.speaking = false; resumeListening(); };
+  u.onerror = () => { state.speaking = false; resumeListening(); };
+  speechSynthesis.speak(u);
+}
+function stopSpeaking(){
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  state.speaking = false;
+}
+
+/* ============================ voice in ============================ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+let emptyStreak = 0;        // consecutive recordings that heard nothing
+const MAX_EMPTY_STREAK = 4; // stop hands-free after this many, instead of looping forever
+
+function initRecognition(){
+  if (!SR) return null;
+  const rec = new SR();
+  rec.lang = "en-IN";
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  let finalText = "";
+  let gotFinal = false;   // did THIS recording actually capture speech?
+
+  rec.onstart = () => {
+    clearMicHint();
+    finalText = "";
+    gotFinal = false;
+    state.listening = true;
+    $("micBtn").classList.add("listening");
+    $("subline").textContent = "Listening…";
+  };
+
+  rec.onresult = (e) => {
+    clearMicHint();
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal){ finalText += t; gotFinal = true; }
+      else interim += t;
+    }
+    $("input").value = (finalText + interim).trim();
+    autoGrow();
+  };
+
+  rec.onerror = (e) => {
+    state.listening = false;
+    $("micBtn").classList.remove("listening");
+    if (e.error === "not-allowed" || e.error === "service-not-allowed"){
+      $("subline").textContent = "Microphone blocked — allow it in the browser address bar.";
+      $("handsFree").checked = state.handsFreeOn = false;
+      $("micBtn").classList.remove("handsfree");
+    } else if (e.error !== "no-speech" && e.error !== "aborted"){
+      $("subline").textContent = "Ready when you are.";
+    }
+  };
+
+  rec.onend = () => {
+    state.listening = false;
+    $("micBtn").classList.remove("listening");
+    const heard = (finalText || "").trim();
+    $("input").value = "";
+
+    const usable = gotFinal && heard.length >= 2;
+    const blocked = state.busy || state.speaking || isDuplicate(heard) || isEchoOfJarvis(heard);
+
+    if (usable && !blocked){
+      emptyStreak = 0;
+      send(heard);                     // the ONLY place voice can trigger a send
+      return;
+    }
+
+    if (usable && blocked && state.busy){
+      // user spoke while I was still thinking — keep it in the box, don't loop
+      $("input").value = heard;
+      autoGrow();
+      $("subline").textContent = "Ready when you are.";
+      return;
+    }
+
+    if (state.handsFreeOn){
+      emptyStreak++;
+      if (emptyStreak >= MAX_EMPTY_STREAK){
+        state.handsFreeOn = false;
+        $("handsFree").checked = false;
+        $("micBtn").classList.remove("handsfree");
+        $("subline").textContent = "Hands-free paused — I kept hearing silence. Click the mic to resume.";
+        return;
+      }
+      setTimeout(startListening, 900);   // was 400ms: too fast, caused a feedback loop
+    } else {
+      $("subline").textContent = "Ready when you are.";
+    }
+  };
+  return rec;
+}
+
+function micHint(msg, kind){
+  const el = $("micStatus");
+  if (!msg){ el.className = "micstatus"; el.innerHTML = ""; return; }
+  el.className = "micstatus show" + (kind ? " " + kind : "");
+  el.innerHTML = msg;
+}
+function clearMicHint(){ micHint(""); }
+
+/* A stuck flag used to make the mic button do nothing at all, forever.
+   This clears anything that got wedged. */
+function resetStuckState(){
+  if (state.speaking && window.speechSynthesis && !speechSynthesis.speaking){
+    state.speaking = false;
+  }
+  if (state.busy && Date.now() - (state.busySince || 0) > 90000){
+    state.busy = false;
+    $("sendBtn").disabled = false;
+    $("subline").textContent = "Ready when you are.";
+  }
+}
+setInterval(resetStuckState, 2000);
+
+function micDiagnostics(){
+  const SRok = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  return {
+    secure: window.isSecureContext,
+    sr: SRok,
+    host: location.hostname,
+    speaking: state.speaking,
+    busy: state.busy,
+    voices: window.speechSynthesis ? speechSynthesis.getVoices().length : 0,
+  };
+}
+
+async function startListening(){
+  clearMicHint();
+  // pressing the mic should interrupt Jarvis, not be blocked by it
+  stopSpeaking();
+  state.speaking = false;
+
+  if (state.busy){
+    micHint("I'm still working on the last request — wait for the reply, then tap the mic.", "warn");
+    return;
+  }
+
+  const d = micDiagnostics();
+  if (!d.secure){
+    micHint("Voice needs a secure page. Open <b>http://127.0.0.1:5000</b> (or localhost) — "
+          + "not the machine's network IP. You are on <b>" + d.host + "</b>.", "err");
+    return;
+  }
+  if (!d.sr){
+    micHint("This browser has no speech recognition. Use <b>Google Chrome</b> or "
+          + "<b>Microsoft Edge</b>. Firefox and Brave don't support it.", "err");
+    return;
+  }
+
+  if (!state.recognition) state.recognition = initRecognition();
+
+  try {
+    state.recognition.start();
+  } catch(e){
+    if (String(e).includes("already")) return;         // harmless
+    micHint("Could not start the microphone: " + e, "err");
+    return;
+  }
+
+  // If nothing happened after 3s, the browser silently refused.
+  setTimeout(async () => {
+    if (state.listening) return;
+    let perm = "unknown";
+    try {
+      const status = await navigator.permissions.query({name: "microphone"});
+      perm = status.state;
+    } catch(e){ /* not supported */ }
+
+    if (perm === "denied"){
+      micHint("Microphone is <b>blocked</b> for this site. Click the padlock/tune icon at the "
+            + "left of the address bar → Microphone → <b>Allow</b>, then reload the page.", "err");
+    } else if (perm === "prompt"){
+      micHint("Waiting for microphone permission — check for a popup near the address bar "
+            + "and click <b>Allow</b>.", "warn");
+    } else {
+      micHint("The mic didn't start. Checks: 1) Windows Settings → Privacy & security → "
+            + "Microphone → allow desktop apps. 2) Click the padlock in the address bar and "
+            + "set Microphone to Allow. 3) Reload with Ctrl+F5.", "warn");
+    }
+  }, 3000);
+}
+
+function resumeListening(){
+  if (!state.handsFreeOn || state.busy || state.speaking) return;
+  state.speaking = false;
+  setTimeout(startListening, 700);
+}
+
+$("micBtn").onclick = () => {
+  if (state.listening){
+    try { state.recognition.stop(); } catch(e){}
+    return;
+  }
+  emptyStreak = 0;
+  startListening();
+};
+
+$("micBtn").oncontextmenu = (e) => {
+  e.preventDefault();
+  const d = micDiagnostics();
+  micHint(`Diagnostics — secure page: <b>${d.secure}</b> · speech API: <b>${d.sr}</b> · `
+        + `host: <b>${d.host}</b> · stuck busy: <b>${d.busy}</b> · stuck speaking: <b>${d.speaking}</b> · `
+        + `voices: <b>${d.voices}</b>`);
+};
+
+$("handsFree").onchange = (e) => {
+  state.handsFreeOn = e.target.checked;
+  emptyStreak = 0;
+  $("micBtn").classList.toggle("handsfree", state.handsFreeOn);
+  if (state.handsFreeOn) startListening();
+  else { try { state.recognition && state.recognition.stop(); } catch(e){} }
+};
+
+$("model").onchange = (e) => { state.model = e.target.value; };
+$("tts").onchange = (e) => { if (!e.target.checked) stopSpeaking(); };
+$("pcControl").onchange = (e) => {
+  if (e.target.checked){
+    const ok = confirm("Allow Jarvis to run shell commands, lock, restart and shut down this PC?\n\nOnly do this if you trust what you are asking it.");
+    if (!ok) e.target.checked = false;
+  }
+};
+$("newChat").onclick = () => {
+  state.history = [];
+  lastReplyText = "";
+  lastSent = {norm: "", at: 0};
+  chat.innerHTML = "";
+  greet();
+};
+$("clearMemory").onclick = async () => {
+  try{
+    await fetch("/api/memory", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({action:"clear"})});
+    renderMemory([]);
+  }catch(e){}
+};
+$("menuBtn").onclick = () => $("sidebar").classList.toggle("open");
+
+/* ============================ boot ============================ */
+function greet(){
+  addMessage("assistant",
+    "Hey. I'm Jarvis, running right here on your PC.\n\n" +
+    "Talk or type — try things like:\n" +
+    "- `open chrome and search for today's weather`\n" +
+    "- `what's my battery and RAM usage?`\n" +
+    "- `create a file on my desktop called ideas.txt with three app ideas`\n" +
+    "- `copy my documents folder to my desktop`\n" +
+    "- `take a screenshot`");
+}
+
+greet();
+loadStatus();
+setInterval(loadStatus, 20000);
+</script>
+</body>
+</html>
